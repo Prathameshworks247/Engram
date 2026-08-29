@@ -66,6 +66,23 @@ func dispatch(args []string) string {
 		return cmdSet(args)
 	case "GET":
 		return cmdGet(args)
+	case "TYPE":
+		if len(args) != 2 {
+			return encodeError("ERR wrong number of arguments for 'type' command")
+		}
+		return encodeSimpleString(store.TypeOf(args[1]))
+	case "RPUSH":
+		return cmdRPush(args)
+	case "LPUSH":
+		return cmdLPush(args)
+	case "LRANGE":
+		return cmdLRange(args)
+	case "LLEN":
+		return cmdLLen(args)
+	case "LPOP":
+		return cmdLPop(args)
+	case "BLPOP":
+		return cmdBLPop(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
