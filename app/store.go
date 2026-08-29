@@ -90,6 +90,30 @@ func (s *Store) getOrCreateListLocked(key string) (*List, error) {
 	return l, nil
 }
 
+func (s *Store) getStreamLocked(key string) (*Stream, bool, error) {
+	e, ok := s.getLive(key)
+	if !ok {
+		return nil, false, nil
+	}
+	st, ok := e.value.(*Stream)
+	if !ok {
+		return nil, false, errWrongType
+	}
+	return st, true, nil
+}
+
+func (s *Store) getOrCreateStreamLocked(key string) (*Stream, error) {
+	st, ok, err := s.getStreamLocked(key)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		st = &Stream{}
+		s.data[key] = entry{value: st}
+	}
+	return st, nil
+}
+
 func (s *Store) TypeOf(key string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -102,6 +126,8 @@ func (s *Store) TypeOf(key string) string {
 		return "string"
 	case *List:
 		return "list"
+	case *Stream:
+		return "stream"
 	default:
 		return "none"
 	}

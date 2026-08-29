@@ -83,6 +83,12 @@ func dispatch(args []string) string {
 		return cmdLPop(args)
 	case "BLPOP":
 		return cmdBLPop(args)
+	case "XADD":
+		return cmdXAdd(args)
+	case "XRANGE":
+		return cmdXRange(args)
+	case "XREAD":
+		return cmdXRead(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
