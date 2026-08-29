@@ -7,7 +7,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
+
+var store = NewStore()
 
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -39,83 +42,76 @@ func handleConn(conn net.Conn) {
 		if len(args) == 0 {
 			continue
 		}
+		reply := dispatch(args)
+		if reply != "" {
+			conn.Write([]byte(reply))
+		}
+	}
+}
 
-		cmd := strings.ToUpper(args[0])
-		switch cmd {
-		case "PING":
-			conn.Write([]byte("+PONG\r\n"))
-		case "ECHO":
-			if len(args) >= 2 {
-				conn.Write([]byte(encodeBulkString(args[1])))
+func dispatch(args []string) string {
+	cmd := strings.ToUpper(args[0])
+	switch cmd {
+	case "PING":
+		if len(args) >= 2 {
+			return encodeBulkString(args[1])
+		}
+		return encodeSimpleString("PONG")
+	case "ECHO":
+		if len(args) >= 2 {
+			return encodeBulkString(args[1])
+		}
+		return encodeError("ERR wrong number of arguments for 'echo' command")
+	case "SET":
+		return cmdSet(args)
+	case "GET":
+		return cmdGet(args)
+	default:
+		return encodeError("ERR unknown command '" + args[0] + "'")
+	}
+}
+
+func cmdSet(args []string) string {
+	if len(args) < 3 {
+		return encodeError("ERR wrong number of arguments for 'set' command")
+	}
+	key, value := args[1], args[2]
+	var ttl time.Duration
+	for i := 3; i < len(args); i++ {
+		switch strings.ToUpper(args[i]) {
+		case "PX":
+			if i+1 >= len(args) {
+				return encodeError("ERR syntax error")
 			}
-		default:
-			conn.Write([]byte("-ERR unknown command\r\n"))
+			ms, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return encodeError("ERR value is not an integer or out of range")
+			}
+			ttl = time.Duration(ms) * time.Millisecond
+			i++
+		case "EX":
+			if i+1 >= len(args) {
+				return encodeError("ERR syntax error")
+			}
+			s, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return encodeError("ERR value is not an integer or out of range")
+			}
+			ttl = time.Duration(s) * time.Second
+			i++
 		}
 	}
+	store.Set(key, value, ttl)
+	return encodeSimpleString("OK")
 }
 
-// readCommand reads a single RESP command (array of bulk strings) from the reader.
-func readCommand(reader *bufio.Reader) ([]string, error) {
-	line, err := readLine(reader)
-	if err != nil {
-		return nil, err
+func cmdGet(args []string) string {
+	if len(args) < 2 {
+		return encodeError("ERR wrong number of arguments for 'get' command")
 	}
-	if len(line) == 0 {
-		return nil, nil
+	value, ok := store.Get(args[1])
+	if !ok {
+		return encodeNullBulkString()
 	}
-
-	if line[0] != '*' {
-		// Inline command fallback.
-		return strings.Fields(line), nil
-	}
-
-	count, err := strconv.Atoi(line[1:])
-	if err != nil {
-		return nil, err
-	}
-
-	args := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		bulkLine, err := readLine(reader)
-		if err != nil {
-			return nil, err
-		}
-		if len(bulkLine) == 0 || bulkLine[0] != '$' {
-			return nil, fmt.Errorf("protocol error: expected '$'")
-		}
-		length, err := strconv.Atoi(bulkLine[1:])
-		if err != nil {
-			return nil, err
-		}
-		buf := make([]byte, length+2)
-		if _, err := readFull(reader, buf); err != nil {
-			return nil, err
-		}
-		args = append(args, string(buf[:length]))
-	}
-	return args, nil
-}
-
-func readLine(reader *bufio.Reader) (string, error) {
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(line, "\r\n"), nil
-}
-
-func readFull(reader *bufio.Reader, buf []byte) (int, error) {
-	total := 0
-	for total < len(buf) {
-		n, err := reader.Read(buf[total:])
-		total += n
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
-}
-
-func encodeBulkString(s string) string {
-	return "$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n"
+	return encodeBulkString(value)
 }
