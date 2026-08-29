@@ -33,6 +33,7 @@ func main() {
 func handleConn(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
+	c := &Client{conn: conn}
 
 	for {
 		args, err := readCommand(reader)
@@ -42,14 +43,14 @@ func handleConn(conn net.Conn) {
 		if len(args) == 0 {
 			continue
 		}
-		reply := dispatch(args)
+		reply := c.dispatch(args)
 		if reply != "" {
 			conn.Write([]byte(reply))
 		}
 	}
 }
 
-func dispatch(args []string) string {
+func execCommand(args []string) string {
 	cmd := strings.ToUpper(args[0])
 	switch cmd {
 	case "PING":
@@ -89,6 +90,8 @@ func dispatch(args []string) string {
 		return cmdXRange(args)
 	case "XREAD":
 		return cmdXRead(args)
+	case "INCR":
+		return cmdIncr(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}

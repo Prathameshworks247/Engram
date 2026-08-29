@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -65,6 +67,29 @@ func (s *Store) Get(key string) (string, bool) {
 }
 
 // getListLocked returns the *List for key, or nil. Caller must hold the lock.
+// Incr increments the integer value at key by 1, creating it at 1 if absent.
+func (s *Store) Incr(key string) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.getLive(key)
+	if !ok {
+		s.data[key] = entry{value: "1"}
+		return 1, nil
+	}
+	str, ok := e.value.(string)
+	if !ok {
+		return 0, errWrongType
+	}
+	n, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return 0, errors.New("ERR value is not an integer or out of range")
+	}
+	n++
+	e.value = strconv.FormatInt(n, 10)
+	s.data[key] = e
+	return n, nil
+}
+
 func (s *Store) getListLocked(key string) (*List, bool, error) {
 	e, ok := s.getLive(key)
 	if !ok {
