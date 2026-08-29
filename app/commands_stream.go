@@ -49,6 +49,7 @@ func cmdXAdd(args []string) string {
 	if !existed {
 		store.data[key] = entry{value: target}
 	}
+	store.touch(key)
 	store.cond.Broadcast()
 	return encodeBulkString(id.String())
 }

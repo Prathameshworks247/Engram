@@ -28,6 +28,7 @@ func push(args []string, left bool) string {
 			l.items = append(l.items, v)
 		}
 	}
+	store.touch(key)
 	store.cond.Broadcast()
 	return encodeInteger(int64(len(l.items)))
 }
@@ -124,6 +125,7 @@ func cmdLPop(args []string) string {
 	if len(l.items) == 0 {
 		delete(store.data, args[1])
 	}
+	store.touch(args[1])
 	if explicitCount {
 		return encodeBulkArray(popped)
 	}
@@ -159,6 +161,7 @@ func cmdBLPop(args []string) string {
 				if len(l.items) == 0 {
 					delete(store.data, k)
 				}
+				store.touch(k)
 				store.Unlock()
 				return encodeBulkArray([]string{k, v})
 			}

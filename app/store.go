@@ -18,19 +18,43 @@ type List struct {
 }
 
 type Store struct {
-	mu   sync.Mutex
-	cond *sync.Cond
-	data map[string]entry
+	mu       sync.Mutex
+	cond     *sync.Cond
+	data     map[string]entry
+	versions map[string]uint64 // bumped on every mutation, for WATCH
 }
 
 func NewStore() *Store {
-	s := &Store{data: make(map[string]entry)}
+	s := &Store{
+		data:     make(map[string]entry),
+		versions: make(map[string]uint64),
+	}
 	s.cond = sync.NewCond(&s.mu)
 	return s
 }
 
 func (s *Store) Lock()   { s.mu.Lock() }
 func (s *Store) Unlock() { s.mu.Unlock() }
+
+// touch records a modification of key. Caller must hold the lock.
+func (s *Store) touch(key string) { s.versions[key]++ }
+
+// Touch is the exported, lock-taking form.
+func (s *Store) Touch(key string) {
+	s.mu.Lock()
+	s.versions[key]++
+	s.mu.Unlock()
+}
+
+// VersionLocked returns the current mutation counter for key. Caller holds the lock.
+func (s *Store) VersionLocked(key string) uint64 { return s.versions[key] }
+
+// Version returns the current mutation counter for key.
+func (s *Store) Version(key string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.versions[key]
+}
 
 // getLive returns the entry if present and not expired. Caller must hold the lock.
 func (s *Store) getLive(key string) (entry, bool) {
@@ -53,6 +77,7 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 		e.expireAt = time.Now().Add(ttl)
 	}
 	s.data[key] = e
+	s.touch(key)
 }
 
 func (s *Store) Get(key string) (string, bool) {
@@ -74,6 +99,7 @@ func (s *Store) Incr(key string) (int64, error) {
 	e, ok := s.getLive(key)
 	if !ok {
 		s.data[key] = entry{value: "1"}
+		s.touch(key)
 		return 1, nil
 	}
 	str, ok := e.value.(string)
@@ -87,6 +113,7 @@ func (s *Store) Incr(key string) (int64, error) {
 	n++
 	e.value = strconv.FormatInt(n, 10)
 	s.data[key] = e
+	s.touch(key)
 	return n, nil
 }
 
