@@ -1,5 +1,19 @@
 # Redis Lists — Interview Notes
 
+## What the CodeCrafters stages asked you to build
+
+1. **Create a list** — `RPUSH key el` on a missing key creates it; reply `:1`.
+2. **Append an element** — `RPUSH` on an existing list; reply new length.
+3. **Append multiple elements** — `RPUSH key a b c`.
+4. **List elements (positive indexes)** — `LRANGE key 0 2` (stop inclusive).
+5. **List elements (negative indexes)** — `LRANGE key -3 -1` (from the end).
+6. **Prepend elements** — `LPUSH key a b c` (result is `c b a`).
+7. **Query list length** — `LLEN key` (0 if missing).
+8. **Remove an element** — `LPOP key` → one element / null.
+9. **Remove multiple elements** — `LPOP key 2` → array.
+10. **Blocking retrieval** — `BLPOP key 0` blocks until something is pushed.
+11. **Blocking retrieval with timeout** — `BLPOP key 0.1` returns null array after the timeout.
+
 Redis lists = **linked lists of strings** (actually `quicklist`: a linked list of `listpack` nodes). O(1) push/pop at both ends, O(N) indexed access.
 
 ## Commands
@@ -50,9 +64,25 @@ for {
 
 Real Redis: keeps a per-key list of blocked clients (`db->blocking_keys`); when a key is written it's added to `server.ready_keys` and served **FIFO** after the current command, so blocked clients are unblocked in arrival order and the pushing client's reply is sent first.
 
-## Gotchas / interview points
-- `LPUSH k a b c` → list is `c b a` (each element pushed to head).
-- `LRANGE` stop is inclusive — differs from most language slice conventions.
-- WRONGTYPE error if key holds a non-list: `-WRONGTYPE Operation against a key holding the wrong kind of value`.
-- Blocking commands can't block the whole server — in single-threaded Redis they return control to the event loop and park the client.
-- `BLPOP` with multiple keys checks them **left to right**; first non-empty wins.
+## Probable interview questions
+
+**Q: `LPUSH mylist a b c` — what's the final list order?**
+`c b a`. Each element is pushed to the head one at a time, so the last argument ends up first. `RPUSH` keeps input order.
+
+**Q: Is `LRANGE 0 -1` inclusive of the last element?**
+Yes. Both bounds are inclusive and negative indexes count from the end (`-1` = last). `LRANGE key 0 -1` returns the whole list.
+
+**Q: How is a Redis list stored? Is it a real linked list?**
+Logically yes; physically it's a **quicklist** — a doubly-linked list whose nodes are `listpack`s (compact arrays of a few dozen elements). This keeps O(1) ends while avoiding one allocation + two pointers per element.
+
+**Q: How does `BLPOP` block without freezing the server?**
+Single-threaded Redis can't actually sleep. It parks the client: registers it in a per-key wait list and returns to the event loop. When a `PUSH` makes the key ready, the server serves the blocked clients (FIFO) right after the current command. A from-scratch implementation can just poll with a short sleep.
+
+**Q: `BLPOP a b c 0` — which key does it pop from?**
+It checks `a`, `b`, `c` left to right and pops from the first non-empty one. `0` timeout means block forever.
+
+**Q: What happens to a list key when its last element is popped?**
+The key is deleted. Redis never keeps an empty list/set/hash/zset — `EXISTS` goes back to 0.
+
+**Q: When would you use a Redis list?**
+Simple queues / job queues (`LPUSH` + `BRPOP`), capped activity feeds (`LPUSH` + `LTRIM`), or a lightweight stack. For anything needing consumer groups or replay, use a Stream instead — see [[03-streams]].

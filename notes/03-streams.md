@@ -1,5 +1,21 @@
 # Redis Streams — Interview Notes
 
+## What the CodeCrafters stages asked you to build
+
+1. **The TYPE command** — `TYPE key` → `string` / `list` / `stream` / `none`.
+2. **Create a stream** — `XADD key 0-1 f v` creates the stream, returns the ID; `TYPE` → `stream`.
+3. **Validating entry IDs** — reject `0-0`; reject an ID `<=` the last one (exact error strings).
+4. **Partially auto-generated IDs** — `XADD key 5-* ...` auto-picks the sequence number.
+5. **Fully auto-generated IDs** — `XADD key * ...` auto-picks `ms` (now) and sequence.
+6. **Query entries from stream** — `XRANGE key start end` (both inclusive).
+7. **Query with `-`** — `-` = smallest possible ID.
+8. **Query with `+`** — `+` = largest possible ID.
+9. **Query single stream using XREAD** — `XREAD STREAMS key id` → entries **after** `id`.
+10. **Query multiple streams using XREAD** — `XREAD STREAMS k1 k2 id1 id2`.
+11. **Blocking reads** — `XREAD BLOCK <ms> STREAMS key id`, null array on timeout.
+12. **Blocking reads without timeout** — `BLOCK 0` = wait forever.
+13. **Blocking reads using `$`** — `$` means "only entries added after this call" (resolve to current last ID).
+
 A **stream** is an append-only log at a key. Each entry = **ID + field/value pairs**. Backed by a *radix tree* (`rax`) keyed by entry ID in real Redis. Think Kafka-topic-lite inside Redis.
 
 ## Entry IDs
@@ -47,9 +63,22 @@ XADD returns the resulting ID as a bulk string. TYPE of a stream key → `stream
 ### `$` as the id
 - Only valid in XREAD. Resolves to **the stream's current `lastID` at the moment the command is received**. So the client only sees entries added *after* it started blocking. Must resolve `$` once, before entering the wait loop.
 
-## Interview points
-- **XRANGE inclusive vs XREAD exclusive** — classic gotcha.
-- IDs are `(time, seq)` so multiple entries in the same millisecond stay ordered.
-- `$` = "tail -f from now"; a concrete last ID = "give me the backlog since X".
-- Consumer groups (`XGROUP`, `XREADGROUP`, `XACK`, PEL) are the real power feature — not in this challenge but worth naming: at-least-once delivery, per-consumer pending lists, `XCLAIM` for reassigning stuck messages.
-- Streams don't drop data on read (unlike lists/pubsub); trim with `XADD ... MAXLEN` / `XTRIM`.
+## Probable interview questions
+
+**Q: Difference between `XRANGE` and `XREAD`?**
+`XRANGE key start end` is a range scan, **both bounds inclusive**, ascending. `XREAD STREAMS key id` returns entries **strictly greater** than `id` (exclusive) and is the building block for tailing / blocking reads.
+
+**Q: What does the entry ID `1526919030474-0` mean, and why two parts?**
+`<millisecondsTime>-<sequence>`. The millisecond part orders entries in time; the sequence disambiguates multiple entries added within the same millisecond. IDs must strictly increase.
+
+**Q: What is `$` in `XREAD`?**
+"From now on." It resolves, at the moment the command is received, to the stream's current last ID, so the caller only sees entries added *after* it started listening. Like `tail -f`. A concrete ID instead means "give me everything since this point" (the backlog).
+
+**Q: How do you implement a blocking `XREAD BLOCK 0`?**
+Snapshot the target "after" IDs, then either (a) poll: sleep a few ms, re-check for entries greater than the snapshot; or (b) use a condition variable that `XADD` broadcasts. `BLOCK 0` = no deadline; `BLOCK ms` = return a null array when the deadline passes.
+
+**Q: Streams vs Pub/Sub vs Lists for messaging?**
+Pub/Sub = fire-and-forget, no history, offline subscribers miss messages. Lists = a queue, but one consumer per message and no replay. Streams = persisted log with IDs, multiple independent readers, replay from any point, and **consumer groups** (`XREADGROUP`/`XACK`) for at-least-once work distribution with per-consumer pending lists and `XCLAIM` to recover stuck messages.
+
+**Q: Do stream entries disappear when read?**
+No — reading doesn't consume. You cap growth explicitly with `XADD ... MAXLEN ~ N` or `XTRIM`. (Consumer groups track *delivery* via the PEL, but the entries themselves stay until trimmed.)
