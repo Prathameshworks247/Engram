@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -11,10 +12,32 @@ type Client struct {
 	inMulti  bool
 	queue    [][]string
 	watching map[string]uint64 // key -> store version at WATCH time
+	replica  *Replica          // non-nil once this connection issued PSYNC
 }
 
 func (c *Client) dispatch(args []string) string {
 	cmd := strings.ToUpper(args[0])
+
+	switch cmd {
+	case "REPLCONF":
+		if len(args) >= 3 && strings.ToUpper(args[1]) == "ACK" {
+			if c.replica != nil {
+				n, _ := strconv.ParseInt(args[2], 10, 64)
+				c.replica.mu.Lock()
+				c.replica.ackOffset = n
+				c.replica.mu.Unlock()
+			}
+			return "" // ACK gets no reply
+		}
+		return encodeSimpleString("OK")
+	case "PSYNC":
+		resync := "+FULLRESYNC " + masterReplID + " 0\r\n"
+		rdb := emptyRDBBytes()
+		c.conn.Write([]byte(resync + "$" + strconv.Itoa(len(rdb)) + "\r\n"))
+		c.conn.Write(rdb)
+		c.replica = registerReplica(c.conn)
+		return ""
+	}
 
 	if c.inMulti {
 		switch cmd {
@@ -60,7 +83,11 @@ func (c *Client) dispatch(args []string) string {
 		return encodeSimpleString("OK")
 	}
 
-	return execCommand(args)
+	reply := execCommand(args)
+	if isWriteCommand(cmd) && !cfg.isReplica() {
+		propagate(args)
+	}
+	return reply
 }
 
 func (c *Client) execTransaction() string {

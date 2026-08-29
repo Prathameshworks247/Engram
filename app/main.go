@@ -13,9 +13,16 @@ import (
 var store = NewStore()
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	parseFlags()
+
+	if cfg.isReplica() {
+		go startReplication()
+	}
+
+	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Printf("Failed to bind to port %d\n", cfg.Port)
 		os.Exit(1)
 	}
 	defer l.Close()
@@ -92,6 +99,12 @@ func execCommand(args []string) string {
 		return cmdXRead(args)
 	case "INCR":
 		return cmdIncr(args)
+	case "INFO":
+		return cmdInfo(args)
+	case "WAIT":
+		return cmdWait(args)
+	case "SELECT":
+		return encodeSimpleString("OK")
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
