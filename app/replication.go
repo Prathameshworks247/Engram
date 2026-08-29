@@ -196,10 +196,12 @@ func startReplication() {
 		cmd := strings.ToUpper(args[0])
 
 		if cmd == "REPLCONF" && len(args) >= 2 && strings.ToUpper(args[1]) == "GETACK" {
-			offset += int64(n)
+			// The offset reported must only cover commands processed BEFORE
+			// this GETACK; add the GETACK bytes afterwards.
 			conn.Write([]byte(encodeBulkArray([]string{
 				"REPLCONF", "ACK", strconv.FormatInt(offset, 10),
 			})))
+			offset += int64(n)
 			continue
 		}
 
