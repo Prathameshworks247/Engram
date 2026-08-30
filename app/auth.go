@@ -48,8 +48,12 @@ func cmdACLGetUser(args []string) string {
 
 // aclGetUserReply renders `ACL GETUSER default`, built up across stages.
 func aclGetUserReply() string {
+	var flags []string
+	if requirePass == "" {
+		flags = append(flags, "nopass")
+	}
 	pairs := []string{
-		encodeBulkString("flags"), encodeBulkArray(nil),
+		encodeBulkString("flags"), encodeBulkArray(flags),
 	}
 	return encodeArray(pairs)
 }
