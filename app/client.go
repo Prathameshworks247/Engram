@@ -32,6 +32,16 @@ func (c *Client) subscribed() bool { return len(c.subs) > 0 }
 func (c *Client) dispatch(args []string) string {
 	cmd := strings.ToUpper(args[0])
 
+	// Enforce authentication: when the default user has a password and this
+	// connection hasn't authenticated, only AUTH/HELLO/RESET/QUIT are allowed.
+	if authRequired() && !c.authed {
+		switch cmd {
+		case "AUTH", "HELLO", "RESET", "QUIT":
+		default:
+			return encodeError("NOAUTH Authentication required.")
+		}
+	}
+
 	switch cmd {
 	case "ACL":
 		return c.cmdACL(args)

@@ -45,6 +45,9 @@ func handleConn(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	c := &Client{conn: conn}
+	// Connections opened while the default user has no password are
+	// auto-authenticated and stay that way even if a password is set later.
+	c.authed = !authRequired()
 	defer c.removeFromPubSub()
 
 	for {
