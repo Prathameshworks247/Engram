@@ -125,6 +125,14 @@ func execCommand(args []string) string {
 		return cmdZScore(args)
 	case "ZREM":
 		return cmdZRem(args)
+	case "GEOADD":
+		return cmdGeoAdd(args)
+	case "GEOPOS":
+		return cmdGeoPos(args)
+	case "GEODIST":
+		return cmdGeoDist(args)
+	case "GEOSEARCH":
+		return cmdGeoSearch(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
