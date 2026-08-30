@@ -14,6 +14,7 @@ var store = NewStore()
 
 func main() {
 	parseFlags()
+	finalizeConfig()
 	loadRDB()
 
 	if cfg.isReplica() {
@@ -155,18 +156,33 @@ func cmdConfig(args []string) string {
 	}
 	var parts []string
 	for _, param := range args[2:] {
-		var val string
-		switch strings.ToLower(param) {
-		case "dir":
-			val = cfg.Dir
-		case "dbfilename":
-			val = cfg.DbFilename
-		default:
+		name := strings.ToLower(param)
+		val, ok := configValue(name)
+		if !ok {
 			continue
 		}
-		parts = append(parts, encodeBulkString(strings.ToLower(param)), encodeBulkString(val))
+		parts = append(parts, encodeBulkString(name), encodeBulkString(val))
 	}
 	return encodeArray(parts)
+}
+
+func configValue(name string) (string, bool) {
+	switch name {
+	case "dir":
+		return cfg.Dir, true
+	case "dbfilename":
+		return cfg.DbFilename, true
+	case "appendonly":
+		return cfg.AppendOnly, true
+	case "appenddirname":
+		return cfg.AppendDirname, true
+	case "appendfilename":
+		return cfg.AppendFilename, true
+	case "appendfsync":
+		return cfg.AppendFsync, true
+	default:
+		return "", false
+	}
 }
 
 func cmdKeys(args []string) string {
