@@ -46,25 +46,10 @@ func cmdACLGetUser(args []string) string {
 	return aclGetUserReply()
 }
 
-// aclGetUserReply renders `ACL GETUSER default`. Filled in incrementally as the
-// stages ask for more fields.
+// aclGetUserReply renders `ACL GETUSER default`, built up across stages.
 func aclGetUserReply() string {
-	flags := "on"
-	if requirePass != "" {
-		// still "on"; password presence shows in the passwords field
-	}
-	var passwords []string
-	if requirePass != "" {
-		passwords = append(passwords, sha256Hex(requirePass))
-	}
-
 	pairs := []string{
-		encodeBulkString("flags"), encodeBulkArray(splitFlags(flags)),
-		encodeBulkString("passwords"), encodeBulkArray(passwords),
-		encodeBulkString("commands"), encodeBulkString("+@all"),
-		encodeBulkString("keys"), encodeBulkString("~*"),
-		encodeBulkString("channels"), encodeBulkString("&*"),
-		encodeBulkString("selectors"), encodeArray(nil),
+		encodeBulkString("flags"), encodeBulkArray(nil),
 	}
 	return encodeArray(pairs)
 }
@@ -90,13 +75,4 @@ func (c *Client) cmdAuth(args []string) string {
 	c.authed = true
 	c.user = "default"
 	return encodeSimpleString("OK")
-}
-
-func splitFlags(s string) []string {
-	f := strings.Fields(s)
-	if requirePass == "" {
-		f = append(f, "nopass")
-	}
-	f = append(f, "allkeys", "allchannels")
-	return f
 }
