@@ -44,6 +44,7 @@ func handleConn(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	c := &Client{conn: conn}
+	defer c.removeFromPubSub()
 
 	for {
 		args, err := readCommand(reader)
@@ -55,7 +56,7 @@ func handleConn(conn net.Conn) {
 		}
 		reply := c.dispatch(args)
 		if reply != "" {
-			conn.Write([]byte(reply))
+			c.send([]byte(reply))
 		}
 	}
 }

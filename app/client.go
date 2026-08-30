@@ -4,16 +4,28 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Client holds per-connection state (transactions, watched keys, etc.).
 type Client struct {
 	conn     net.Conn
+	writeMu  sync.Mutex // serialises writes (reply loop + pub/sub delivery)
 	inMulti  bool
 	queue    [][]string
 	watching map[string]uint64 // key -> store version at WATCH time
 	replica  *Replica          // non-nil once this connection issued PSYNC
+	subs     map[string]bool   // channels this client is subscribed to
 }
+
+// send writes raw bytes to the connection under the write lock.
+func (c *Client) send(b []byte) {
+	c.writeMu.Lock()
+	c.conn.Write(b)
+	c.writeMu.Unlock()
+}
+
+func (c *Client) subscribed() bool { return len(c.subs) > 0 }
 
 func (c *Client) dispatch(args []string) string {
 	cmd := strings.ToUpper(args[0])
@@ -37,6 +49,20 @@ func (c *Client) dispatch(args []string) string {
 		c.conn.Write(rdb)
 		c.replica = registerReplica(c.conn)
 		return ""
+	case "SUBSCRIBE":
+		return c.cmdSubscribe(args)
+	case "UNSUBSCRIBE":
+		return c.cmdUnsubscribe(args)
+	case "PUBLISH":
+		return cmdPublish(args)
+	}
+
+	if c.subscribed() && !allowedInSubscribeMode(cmd) {
+		return encodeError("ERR Can't execute '" + strings.ToLower(cmd) +
+			"': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context")
+	}
+	if c.subscribed() && cmd == "PING" {
+		return encodeSimpleString("PONG")
 	}
 
 	if c.inMulti {
