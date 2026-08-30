@@ -84,8 +84,11 @@ func (c *Client) dispatch(args []string) string {
 	}
 
 	reply := execCommand(args)
-	if isWriteCommand(cmd) && !cfg.isReplica() {
-		propagate(args)
+	if isWriteCommand(cmd) {
+		appendAOF(args)
+		if !cfg.isReplica() {
+			propagate(args)
+		}
 	}
 	return reply
 }

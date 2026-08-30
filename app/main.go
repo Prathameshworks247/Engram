@@ -16,6 +16,7 @@ func main() {
 	parseFlags()
 	finalizeConfig()
 	loadRDB()
+	setupAOF()
 
 	if cfg.isReplica() {
 		go startReplication()

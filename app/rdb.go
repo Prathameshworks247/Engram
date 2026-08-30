@@ -34,6 +34,11 @@ func loadRDB() {
 	if path == "" {
 		return
 	}
+	loadRDBFrom(path)
+}
+
+// loadRDBFrom parses an RDB file at path into the store. Missing file is ignored.
+func loadRDBFrom(path string) {
 	f, err := os.Open(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
