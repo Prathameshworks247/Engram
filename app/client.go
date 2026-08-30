@@ -62,7 +62,14 @@ func (c *Client) dispatch(args []string) string {
 			"': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context")
 	}
 	if c.subscribed() && cmd == "PING" {
-		return encodeSimpleString("PONG")
+		payload := ""
+		if len(args) >= 2 {
+			payload = args[1]
+		}
+		return encodeArray([]string{
+			encodeBulkString("pong"),
+			encodeBulkString(payload),
+		})
 	}
 
 	if c.inMulti {
