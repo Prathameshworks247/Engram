@@ -16,6 +16,8 @@ type Client struct {
 	watching map[string]uint64 // key -> store version at WATCH time
 	replica  *Replica          // non-nil once this connection issued PSYNC
 	subs     map[string]bool   // channels this client is subscribed to
+	user     string            // authenticated username ("" == default)
+	authed   bool              // has completed AUTH (when a password is required)
 }
 
 // send writes raw bytes to the connection under the write lock.
@@ -31,6 +33,10 @@ func (c *Client) dispatch(args []string) string {
 	cmd := strings.ToUpper(args[0])
 
 	switch cmd {
+	case "ACL":
+		return c.cmdACL(args)
+	case "AUTH":
+		return c.cmdAuth(args)
 	case "REPLCONF":
 		if len(args) >= 3 && strings.ToUpper(args[1]) == "ACK" {
 			if c.replica != nil {

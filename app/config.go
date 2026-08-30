@@ -67,6 +67,11 @@ func parseFlags() {
 				cfg.AppendFsync = args[i+1]
 				i++
 			}
+		case "--requirepass":
+			if i+1 < len(args) {
+				requirePass = args[i+1]
+				i++
+			}
 		case "--replicaof":
 			if i+1 < len(args) {
 				spec := args[i+1]
