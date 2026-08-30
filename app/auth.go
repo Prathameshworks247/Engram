@@ -52,8 +52,13 @@ func aclGetUserReply() string {
 	if requirePass == "" {
 		flags = append(flags, "nopass")
 	}
+	var passwords []string
+	if requirePass != "" {
+		passwords = append(passwords, sha256Hex(requirePass))
+	}
 	pairs := []string{
 		encodeBulkString("flags"), encodeBulkArray(flags),
+		encodeBulkString("passwords"), encodeBulkArray(passwords),
 	}
 	return encodeArray(pairs)
 }
