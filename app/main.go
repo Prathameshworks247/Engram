@@ -113,6 +113,18 @@ func execCommand(args []string) string {
 		return cmdConfig(args)
 	case "KEYS":
 		return cmdKeys(args)
+	case "ZADD":
+		return cmdZAdd(args)
+	case "ZRANK":
+		return cmdZRank(args)
+	case "ZRANGE":
+		return cmdZRange(args)
+	case "ZCARD":
+		return cmdZCard(args)
+	case "ZSCORE":
+		return cmdZScore(args)
+	case "ZREM":
+		return cmdZRem(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
