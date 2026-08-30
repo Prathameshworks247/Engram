@@ -15,6 +15,7 @@ var store = NewStore()
 func main() {
 	parseFlags()
 	finalizeConfig()
+	initAuth()
 	loadRDB()
 	setupAOF()
 
