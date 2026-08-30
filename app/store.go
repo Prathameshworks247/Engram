@@ -80,6 +80,32 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 	s.touch(key)
 }
 
+// SetAbsolute stores a string value with an optional absolute expiry
+// (expireAtMs == 0 means no expiry). Used when loading an RDB file.
+func (s *Store) SetAbsolute(key, value string, expireAtMs int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := entry{value: value}
+	if expireAtMs > 0 {
+		e.expireAt = time.UnixMilli(expireAtMs)
+	}
+	s.data[key] = e
+	s.touch(key)
+}
+
+// Keys returns all live (non-expired) keys.
+func (s *Store) Keys() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.data))
+	for k := range s.data {
+		if _, ok := s.getLive(k); ok {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

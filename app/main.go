@@ -14,6 +14,7 @@ var store = NewStore()
 
 func main() {
 	parseFlags()
+	loadRDB()
 
 	if cfg.isReplica() {
 		go startReplication()
@@ -105,6 +106,10 @@ func execCommand(args []string) string {
 		return cmdWait(args)
 	case "SELECT":
 		return encodeSimpleString("OK")
+	case "CONFIG":
+		return cmdConfig(args)
+	case "KEYS":
+		return cmdKeys(args)
 	default:
 		return encodeError("ERR unknown command '" + args[0] + "'")
 	}
@@ -142,6 +147,77 @@ func cmdSet(args []string) string {
 	}
 	store.Set(key, value, ttl)
 	return encodeSimpleString("OK")
+}
+
+func cmdConfig(args []string) string {
+	if len(args) < 3 || strings.ToUpper(args[1]) != "GET" {
+		return encodeError("ERR wrong number of arguments for 'config|get' command")
+	}
+	var parts []string
+	for _, param := range args[2:] {
+		var val string
+		switch strings.ToLower(param) {
+		case "dir":
+			val = cfg.Dir
+		case "dbfilename":
+			val = cfg.DbFilename
+		default:
+			continue
+		}
+		parts = append(parts, encodeBulkString(strings.ToLower(param)), encodeBulkString(val))
+	}
+	return encodeArray(parts)
+}
+
+func cmdKeys(args []string) string {
+	if len(args) != 2 {
+		return encodeError("ERR wrong number of arguments for 'keys' command")
+	}
+	keys := store.Keys()
+	if args[1] == "*" {
+		return encodeBulkArray(keys)
+	}
+	var matched []string
+	for _, k := range keys {
+		if globMatch(args[1], k) {
+			matched = append(matched, k)
+		}
+	}
+	return encodeBulkArray(matched)
+}
+
+// globMatch does a minimal glob: '*' matches any run, '?' one char.
+func globMatch(pattern, s string) bool {
+	if pattern == "*" {
+		return true
+	}
+	var match func(p, t string) bool
+	match = func(p, t string) bool {
+		for len(p) > 0 {
+			switch p[0] {
+			case '*':
+				if match(p[1:], t) {
+					return true
+				}
+				if len(t) == 0 {
+					return false
+				}
+				t = t[1:]
+			case '?':
+				if len(t) == 0 {
+					return false
+				}
+				p, t = p[1:], t[1:]
+			default:
+				if len(t) == 0 || p[0] != t[0] {
+					return false
+				}
+				p, t = p[1:], t[1:]
+			}
+		}
+		return len(t) == 0
+	}
+	return match(pattern, s)
 }
 
 func cmdGet(args []string) string {

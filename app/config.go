@@ -11,6 +11,8 @@ type Config struct {
 	ReplicaOf  string // raw "host port", empty if this is a master
 	MasterHost string
 	MasterPort int
+	Dir        string
+	DbFilename string
 }
 
 var cfg = Config{Port: 6379}
@@ -22,6 +24,16 @@ func parseFlags() {
 		case "--port":
 			if i+1 < len(args) {
 				cfg.Port, _ = strconv.Atoi(args[i+1])
+				i++
+			}
+		case "--dir":
+			if i+1 < len(args) {
+				cfg.Dir = args[i+1]
+				i++
+			}
+		case "--dbfilename":
+			if i+1 < len(args) {
+				cfg.DbFilename = args[i+1]
 				i++
 			}
 		case "--replicaof":
